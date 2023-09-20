@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# print PATH environment.
+
+IFS=':'
+
+for i in $PATH
+do
+    echo $i
+done

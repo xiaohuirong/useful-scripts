@@ -1,0 +1,7 @@
+#!/bin/bash
+# rename file or directory, new directory just need name no directory.
+
+old_file=$1
+new_filename=$2
+new_path="$(dirname "$old_file")"
+mv "$old_file" "$new_path/$new_filename"

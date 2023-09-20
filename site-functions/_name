@@ -1,0 +1,17 @@
+#compdef name
+
+# auto complete for name.
+local arg_position
+current_word=${words[CURRENT]}
+
+# 如果当前参数个数为1，即第一个参数还未输入
+if [[ ${#words[@]} -eq 2 ]]; then
+  _files
+# 如果当前参数个数大于1，即第一个参数已输入
+else
+  # 获取第一个参数去除路径的文件名
+  # 去除多余转译符
+  tmp=$(tr -d '\\' <<< "${words[2]}")
+  compadd "$(basename "${tmp}")"
+fi
+
