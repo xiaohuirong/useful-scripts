@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# help <command>
+
+"$@" --help 2>&1 | bat --plain --language=help
+

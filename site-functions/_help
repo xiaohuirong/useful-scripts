@@ -1,0 +1,8 @@
+#compdef help
+
+# auto complete for help.
+
+if [[ $CURRENT -eq 2 ]]; then
+    _command_names
+fi
+
