@@ -19,7 +19,7 @@ echo -e -n $reset_color
 files=$(pacman -Qlq "$@" 2> /dev/null)
 
 if [ $? -ne 0 ]; then
-    echo -e "${yellow_color}Not installed, get from database...${reset_color}\n"
+    echo -e "${yellow_color}Not installed, get from database...${reset_color}"
     # 检查~/.cache/pkgfile目录是否存在，如果不存在则创建
     if [ ! -d "$pkgfile_dir" ]; then
         mkdir -p "$pkgfile_dir"
