@@ -8,5 +8,8 @@ if [ ! -d "$pkgfile_dir" ]; then
     mkdir -p "$pkgfile_dir"
 fi
 
-pkgfile -u -D ${pkgfile_dir}
-pkgfile -l "$@"
+pacman -Si "$@" | head -n 1
+if ! pacman -Qlq "$@" 2> /dev/null; then
+    pkgfile -u -D ${pkgfile_dir} > /dev/null
+    pkgfile -l -q "$@"
+fi
