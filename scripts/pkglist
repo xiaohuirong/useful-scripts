@@ -41,6 +41,9 @@ while IFS= read -r file; do
 
         # 使用case语句匹配后缀并打印不同颜色
         case "$suffix" in
+            gz|xz)
+                echo -e "${red_color}$file${reset_color}"  
+                ;;
             jpg|jpeg)
                 echo -e "${purple_colro}$file${reset_color}"  
                 ;;
