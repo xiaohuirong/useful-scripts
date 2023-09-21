@@ -1,8 +1,8 @@
-#compdef _pkgdown
+#compdef pkgdown pkglist
 
 # provides completions for packages available from repositories
 # these can be specified as either 'package' or 'repository/package'
-local -a packages repositories
+local packages repositories
 
 if compset -P1 '*/*'; then
     packages=( $(pacman -Sql ${words[CURRENT]%/*}) )

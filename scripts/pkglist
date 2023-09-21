@@ -1,0 +1,12 @@
+#!/bin/bash
+
+cache_dir="$HOME/.cache"
+pkgfile_dir="$cache_dir/pkgfile"
+
+# 检查~/.cache/pkgfile目录是否存在，如果不存在则创建
+if [ ! -d "$pkgfile_dir" ]; then
+    mkdir -p "$pkgfile_dir"
+fi
+
+pkgfile -u -D ${pkgfile_dir}
+pkgfile -l "$@"
