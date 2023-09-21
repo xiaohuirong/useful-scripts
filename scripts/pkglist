@@ -3,13 +3,53 @@
 cache_dir="$HOME/.cache"
 pkgfile_dir="$cache_dir/pkgfile"
 
-# 检查~/.cache/pkgfile目录是否存在，如果不存在则创建
-if [ ! -d "$pkgfile_dir" ]; then
-    mkdir -p "$pkgfile_dir"
+# 定义ANSI颜色代码
+blue_color="\033[34m"
+reset_color="\033[0m"
+yellow_color="\033[33m"
+green_color="\033[32m"
+red_color="\033[31m"
+purple_color="\033[35m"
+cyan_color="\033[36m"
+
+echo -e -n $yellow_color
+pacman -Si "$@" | head -n 1
+echo -e -n $reset_color
+
+files=$(pacman -Qlq "$@" 2> /dev/null)
+
+if [ $? -ne 0 ]; then
+    echo -e "${yellow_color}Not installed, get from database...${reset_color}\n"
+    # 检查~/.cache/pkgfile目录是否存在，如果不存在则创建
+    if [ ! -d "$pkgfile_dir" ]; then
+        mkdir -p "$pkgfile_dir"
+    fi
+
+    pkgfile -u -D ${pkgfile_dir} > /dev/null
+    files=$(pkgfile -l -q "$@")
 fi
 
-pacman -Si "$@" | head -n 1
-if ! pacman -Qlq "$@" 2> /dev/null; then
-    pkgfile -u -D ${pkgfile_dir} > /dev/null
-    pkgfile -l -q "$@"
-fi
+# 使用换行符分割多行字符串，然后逐行处理
+while IFS= read -r file; do
+    if [[ "$file" == */ ]]; then
+        echo -e "${blue_color}$file${reset_color}"
+    elif [[ "$file" == /usr/bin/* ]]; then
+        echo -e "${green_color}$file${reset_color}"
+    else
+        # 获取文件后缀
+        suffix="${file##*.}"
+
+        # 使用case语句匹配后缀并打印不同颜色
+        case "$suffix" in
+            jpg|jpeg)
+                echo -e "${purple_colro}$file${reset_color}"  
+                ;;
+            sh)
+                echo -e "${cyan_color}$file${reset_color}"
+                ;;
+            *)
+                echo "$file"
+                ;;
+        esac
+    fi
+done <<< "$files"
