@@ -1,0 +1,19 @@
+#compdef _pkgdown
+
+# provides completions for packages available from repositories
+# these can be specified as either 'package' or 'repository/package'
+local -a packages repositories
+
+if compset -P1 '*/*'; then
+    packages=( $(pacman -Sql ${words[CURRENT]%/*}) )
+    typeset -U packages
+    compadd ${(@)packages}
+else
+    packages=( $(pacman -Sql) )
+    typeset -U packages
+    compadd "${(@)packages}"
+
+    repositories=($(pacman-conf --repo-list))
+    typeset -U repositories
+    compadd -S "/" $repositories
+fi

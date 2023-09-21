@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# https://bbs.archlinux.org/viewtopic.php?id=286960
+# 声明一个数组来存储所有下载链接
+download_links=()
+
+# 遍历传递给脚本的每个包名
+for pkgname in "$@"; do
+    # 使用pacman -Sp查询包的下载链接
+    pkg_links=$(pacman -Sp "$pkgname")
+    # 将下载链接添加到数组中
+    download_links+=($pkg_links)
+done
+
+# 去重下载链接
+unique_download_links=($(echo "${download_links[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+# 遍历去重后的下载链接并使用wget下载
+for link in "${unique_download_links[@]}"; do
+    wget --show-progress -q "${link}"
+done
+
