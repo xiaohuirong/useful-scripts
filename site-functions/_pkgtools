@@ -1,5 +1,8 @@
 #compdef pkgdown pkglist
 
+# todo: add completions reusage to speed up completions.
+# but now I don't know how to add memorable variable.
+
 # provides completions for packages available from repositories
 # these can be specified as either 'package' or 'repository/package'
 local packages repositories
