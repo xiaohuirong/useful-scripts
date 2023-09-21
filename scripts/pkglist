@@ -44,8 +44,8 @@ while IFS= read -r file; do
             gz|xz)
                 echo -e "${red_color}$file${reset_color}"  
                 ;;
-            jpg|jpeg)
-                echo -e "${purple_colro}$file${reset_color}"  
+            jpg|jpeg|png)
+                echo -e "${purple_color}$file${reset_color}"  
                 ;;
             sh)
                 echo -e "${cyan_color}$file${reset_color}"
