@@ -26,7 +26,7 @@ if [ $? -ne 0 ]; then
     fi
 
     pkgfile -u -D ${pkgfile_dir} > /dev/null
-    files=$(pkgfile -l -q "$@")
+    files=$(pkgfile -D ${pkgfile_dir} -l -q "$@")
 fi
 
 # 使用换行符分割多行字符串，然后逐行处理
