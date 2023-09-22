@@ -11,6 +11,7 @@ green_color="\033[32m"
 red_color="\033[31m"
 purple_color="\033[35m"
 cyan_color="\033[36m"
+so_color="\u001B[1m\u001B[96m"
 
 echo -e -n $yellow_color
 pacman -Si "$@" | head -n 1
@@ -40,19 +41,26 @@ while IFS= read -r file; do
         suffix="${file##*.}"
 
         # 使用case语句匹配后缀并打印不同颜色
+        # case 自带continue
         case "$suffix" in
             gz|xz)
                 echo -e "${red_color}$file${reset_color}"  
                 ;;
-            jpg|jpeg|png)
+            jpg|jpeg|png|svg|gif|webp|mp4|mkv)
                 echo -e "${purple_color}$file${reset_color}"  
                 ;;
             sh)
                 echo -e "${cyan_color}$file${reset_color}"
                 ;;
-            *)
-                echo "$file"
-                ;;
         esac
+
+        #long_suffix="${file#*.}"
+        file_name=$(basename "$file")
+        if [[ $file_name == "lib"* && $file_name == *".so"* ]]; then
+            echo -e "${so_color}$file${reset_color}"
+        else
+            echo "$file"
+        fi
+
     fi
 done <<< "$files"
