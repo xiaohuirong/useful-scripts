@@ -17,6 +17,10 @@ unique_download_links=($(echo "${download_links[@]}" | tr ' ' '\n' | sort -u | t
 
 # 遍历去重后的下载链接并使用wget下载
 for link in "${unique_download_links[@]}"; do
-    wget --show-progress -q "${link}"
+    if [[ $link == file://* ]]; then
+        echo "copy from ${link#file://}"
+        cp "${link#file://}" .
+    else
+        wget --show-progress -q "${link}"
+    fi
 done
-
