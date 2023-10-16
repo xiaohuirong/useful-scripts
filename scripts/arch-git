@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# clone aur repo, just need to input repo name.
+
+git clone https://gitlab.archlinux.org/archlinux/packaging/packages/${1}.git
