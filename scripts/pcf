@@ -21,4 +21,5 @@ INITIAL_QUERY="${*:-}"
     --header '╱ CTRL-R (ripgrep mode) ╱ CTRL-F (fzf mode) ╱ CTRL-Y (copy content) ╱ CTRL-P (copy filename)' \
 	--preview 'bat --color=always {1} --highlight-line {2} --wrap=character --style=numbers' \
 	--preview-window 'up,60%,wrap,+{2}+3/3' \
-	--bind 'enter:execute(vim {1} +{2})'
+	--bind 'enter:execute(vim {1} +{2})' \
+	--bind 'ctrl-e:become(vim {1} +{2})'
