@@ -1,0 +1,103 @@
+#!/bin/bash
+
+function wait_until_settled() {
+  udevadm settle
+  sudo blockdev --flushbufs --rereadpt "${1}"
+  until test -e "${1}p2"; do
+    echo "${1}p2 doesn't exist yet..."
+    sleep 1
+  done
+}
+
+NEWUSER="arch"
+PASSWD="123456"
+
+image=/home/xiao/tmp/image.raw
+qemu_image=/home/xiao/tmp/image.qcow2
+work_directory=/home/xiao/tmp
+root_mountpoint=/home/xiao/tmp/arch
+esp_mountpoint=$root_mountpoint/boot
+config_dir=/home/xiao/config
+
+mkdir -p $root_mountpoint > /dev/null
+
+truncate -s 20G $image > /dev/null
+
+sgdisk --clear \
+    --new 1::+256M --typecode=1:ef00 \
+    --new 2::-0 --typecode=2:8304 \
+    $image > /dev/null
+
+loop=$(sudo losetup --find --partscan --show $image)
+wait_until_settled "$loop"
+
+esp=${loop}p1
+root=${loop}p2
+sudo mkfs.fat -F32 -n ESP $esp
+sudo mkfs.btrfs -L ROOT $root -f
+
+sudo mount -o compress=zstd $root $root_mountpoint
+cd $root_mountpoint
+sudo btrfs subvolume create @
+sudo btrfs subvolume create @swap
+sudo chattr +C @swap
+sudo chmod 0700 @swap
+sudo fallocate -l 512M "@swap/swapfile"
+sudo chmod 0600 "@swap/swapfile"
+sudo mkswap "@swap/swapfile"
+cd ..
+sudo umount $root_mountpoint
+sudo mount -o compress=zstd,subvol=@ $root $root_mountpoint
+
+sudo mkdir -p $esp_mountpoint
+sudo mount $esp $esp_mountpoint
+sudo mkdir -p $root_mountpoint/swap
+sudo mount -o subvol=@swap $root $root_mountpoint/swap
+
+sudo pacstrap $root_mountpoint base linux btrfs-progs sudo vim grub arch-install-scripts networkmanager man-db man-pages texinfo openssh zsh ppp
+
+cd $work_directory
+sudo genfstab -U $root_mountpoint > $work_directory/fstab
+sudo sed -i '10,$d' $work_directory/fstab
+sudo echo "/swap/swapfile none swap sw 0 0" >> $work_directory/fstab
+sudo mv $work_directory/fstab $root_mountpoint/etc/
+
+sudo arch-chroot $root_mountpoint /bin/bash <<EOL
+set -v
+echo 'Server = https://mirrors.hoream.top/archlinux/\$repo/os/\$arch' >> /etc/pacman.d/mirrorlist
+pacman -Syu
+systemctl enable NetworkManager sshd
+
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+hwclock --systohc
+echo -e 'en_US.UTF-8 UTF-8\nzh_CN.UTF-8 UTF-8' >> /etc/locale.gen
+locale-gen
+
+echo LANG=en_US.UTF-8 > /etc/locale.conf
+echo archqemu > /etc/hostname
+
+echo -e '127.0.0.1  localhost\n::1  localhost' >> /etc/hosts
+
+useradd -m -G wheel -s /bin/zsh "${NEWUSER}"
+chown "${NEWUSER}:${NEWUSER}" "/home/${NEWUSER}"
+echo -e "${PASSWD}\n${PASSWD}" | passwd
+echo -e "${PASSWD}\n${PASSWD}" | passwd "${NEWUSER}"
+echo "${NEWUSER} ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/${NEWUSER}"
+
+## Setup grub
+sudo grub-install --target=x86_64-efi --recheck --removable --efi-directory=/boot --boot-directory=/boot
+grub-mkconfig -o /boot/grub/grub.cfg
+
+cp -a /boot/{initramfs-linux-fallback.img,initramfs-linux.img}
+
+EOL
+
+cp $config_dir/. $root_mountpoint/home/$NEWUSER -r
+sync
+
+sudo umount $esp_mountpoint
+sudo umount $root_mountpoint/swap
+sudo umount $root_mountpoint
+sudo losetup -d $loop
+qemu-img convert -f raw -O qcow2 $image $qemu_image
+rm $image
