@@ -1,89 +1,92 @@
 #!/bin/bash
+set -v
 
 show_help() {
-  echo "Usage: $0 -o <out dir> -w <work_dir> [-s <img_size>] <profile_dir>"
-  echo "  options:"
-  echo "  -o <out_dir>              Set the output directory"
-  echo "  -w <work_dir>             Set the working directory"
-  echo "  -s <img_size>             Set the qemu img size (default 20G)"
-  echo "  -h                        Show this help message"
-  echo "  <profile_dir>             Custom profile directory"
+	echo "Usage: $0 -o <out dir> -w <work_dir> [-s <img_size>] <profile_dir>"
+	echo "  options:"
+	echo "  -o <out_dir>              Set the output directory"
+	echo "  -w <work_dir>             Set the working directory"
+	echo "  -s <img_size>             Set the qemu img size (default 20G)"
+	echo "  -h                        Show this help message"
+	echo "  <profile_dir>             Custom profile directory"
 }
 
 while getopts ":o:w:s:h-" opt; do
-  case $opt in
-    o)
-      out_dir="$OPTARG"
-      ;;
-    w)
-      work_dir="$OPTARG"
-      ;;
-    s)
-      img_size="$OPTARG"
-      ;;
-    h)
-      show_help
-      exit 0
-      ;;
-    \?)
-      echo "Unvalid option: -$OPTARG" >&2
-      show_help
-      exit 1
-      ;;
-    :)
-      echo "-$OPTARG need argument." >&2
-      show_help
-      exit 1
-      ;;
-  esac
+	case $opt in
+	o)
+		out_dir="$OPTARG"
+		;;
+	w)
+		work_dir="$OPTARG"
+		;;
+	s)
+		img_size="$OPTARG"
+		;;
+	h)
+		show_help
+		exit 0
+		;;
+	\?)
+		echo "Unvalid option: -$OPTARG" >&2
+		show_help
+		exit 1
+		;;
+	:)
+		echo "-$OPTARG need argument." >&2
+		show_help
+		exit 1
+		;;
+	esac
 done
 
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 profile_dir="$1"
 
 if [ -z "$out_dir" ] || [ -z "$work_dir" ] || [ -z "$profile_dir" ]; then
-  show_help
+	show_help
 fi
 
 if [ -z "$img_size" ]; then
-    img_size=20G
+	img_size=20G
 fi
 
 NEWUSER="arch"
 PASSWD="123456"
 
 current_date=$(date +'%Y.%m.%d')
-image="$work_dir"/image.raw
-qemu_image="$out_dir"/archlinux-${current_date}-x86_64.qcow2
-root_mountpoint="$work_dir"/arch
-esp_mountpoint="$root_mountpoint"/boot
+image="$work_dir/image.raw"
+qemu_image="$out_dir/archlinux-${current_date}-x86_64.qcow2"
+root_mountpoint="$work_dir/arch"
+esp_mountpoint="$root_mountpoint/boot"
+swap_mountpoint="$root_mountpoint/swap"
 
 function wait_until_settled() {
-  udevadm settle
-  sudo blockdev --flushbufs --rereadpt "${1}"
-  until test -e "${1}p2"; do
-    echo "${1}p2 doesn't exist yet..."
-    sleep 1
-  done
+	udevadm settle
+	sudo blockdev --flushbufs --rereadpt "${1}"
+	until test -e "${1}p2"; do
+		echo "${1}p2 doesn't exist yet..."
+		sleep 1
+	done
 }
 
 handle_error() {
-  echo "Something error."
-  sudo umount -R $root_mountpoint
-  sudo losetup -d $loop
-  rm $image
+	echo "Something error."
+	sudo umount -R $root_mountpoint
+	sudo losetup -d $loop
+	rm $image
+    exit 1
 }
 trap 'handle_error' ERR
 
-mkdir -p $root_mountpoint > /dev/null
+mkdir -p "$root_mountpoint" >/dev/null
 
-truncate -s $img_size $image > /dev/null
+truncate -s "$img_size" "$image" >/dev/null
 
 sgdisk --clear \
-    --new 1::+1M --typecode=1:ef02 \
-    --new 2::+255M --typecode=2:ef00 \
-    --new 3::-0 --typecode=3:8304 \
-    $image > /dev/null
+	--new 1::+1M --typecode=1:ef02 \
+	--new 2::+255M --typecode=2:ef00 \
+	--new 3::-0 --typecode=3:8304 \
+	"$image" >/dev/null
 
 loop=$(sudo losetup --find --partscan --show $image)
 wait_until_settled "$loop"
@@ -93,34 +96,31 @@ root=${loop}p3
 sudo mkfs.fat -F32 -n ESP $esp
 sudo mkfs.btrfs -L ROOT $root -f
 
-sudo mount -o compress=zstd $root $root_mountpoint
-cd $root_mountpoint
-sudo btrfs subvolume create @
-sudo btrfs subvolume create @swap
-sudo chattr +C @swap
-sudo chmod 0700 @swap
-sudo fallocate -l 512M "@swap/swapfile"
-sudo chmod 0600 "@swap/swapfile"
-sudo mkswap "@swap/swapfile"
-cd ..
-sudo umount $root_mountpoint
-sudo mount -o compress=zstd,subvol=@ $root $root_mountpoint
+sudo mount -o compress=zstd "$root" "$root_mountpoint"
+sudo btrfs subvolume create "$root_mountpoint/@"
+sudo btrfs subvolume create "$root_mountpoint/@swap"
+sudo chattr +C "$root_mountpoint/@swap"
+sudo chmod 0700 "$root_mountpoint/@swap"
+sudo fallocate -l 512M "$root_mountpoint/@swap/swapfile"
+sudo chmod 0600 "$root_mountpoint/@swap/swapfile"
+sudo mkswap "$root_mountpoint/@swap/swapfile"
+sudo umount "$root_mountpoint"
+sudo mount -o compress=zstd,subvol=@ $root "$root_mountpoint"
 
-sudo mkdir -p $esp_mountpoint
-sudo mount $esp $esp_mountpoint
-sudo mkdir -p $root_mountpoint/swap
-sudo mount -o subvol=@swap $root $root_mountpoint/swap
+sudo mkdir -p "$esp_mountpoint"
+sudo mount $esp "$esp_mountpoint"
+sudo mkdir -p "$swap_mountpoint"
+sudo mount -o subvol=@swap $root "$swap_mountpoint"
 
 mapfile -t packages < <(sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' "$profile_dir/qemu_packages")
 sudo pacstrap -C $profile_dir/pacman.conf $root_mountpoint ${packages[@]}
 
-cd $work_dir
-sudo genfstab -U $root_mountpoint > "$work_dir/fstab"
-sudo sed -i '10,$d' $work_dir/fstab
-sudo echo "/swap/swapfile none swap sw 0 0" >> $work_dir/fstab
-sudo mv $work_dir/fstab $root_mountpoint/etc/
+sudo genfstab -U "$root_mountpoint" >"$work_dir/fstab"
+sudo sed -i '10,$d' "$work_dir/fstab"
+sudo echo "/swap/swapfile none swap sw 0 0" >>"$work_dir/fstab"
+sudo mv "$work_dir/fstab" "$root_mountpoint/etc"
 
-sudo arch-chroot $root_mountpoint /bin/bash <<EOL
+sudo arch-chroot "$root_mountpoint" /bin/bash <<EOL
 set -v
 
 add_mirrors="
@@ -138,10 +138,10 @@ Server = https://mirrors.hoream.top/archoream
 "
 echo -e "\$add_mirrors" | tee -a /etc/pacman.conf
 
-echo 'Server = https://mirrors.hoream.top/archlinux/\$repo/os/\$arch' >> /etc/pacman.d/mirrorlist
-echo 'Server = https://mirrors.hoream.top/archlinuxcn/\$arch' >> /etc/pacman.d/archlinuxcn-mirrorlist
+echo 'Server = https://mirrors.hoream.top/archlinux/\$repo/os/\$arch' > /etc/pacman.d/mirrorlist
+echo 'Server = https://mirrors.hoream.top/archlinuxcn/\$arch' > /etc/pacman.d/archlinuxcn-mirrorlist
 
-pacman -Syu
+pacman -Syu --noconfirm
 systemctl enable NetworkManager sshd
 
 ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
@@ -171,14 +171,16 @@ cp -a /boot/{initramfs-linux-fallback.img,initramfs-linux.img}
 
 EOL
 
-home_profile="$profile_dir"/airootfs/etc/skel
-cp "$home_profile"/. "$root_mountpoint"/home/$NEWUSER -r
+home_profile="$profile_dir/airootfs/etc/skel"
+cp "$home_profile/." "$root_mountpoint/home/$NEWUSER" -r
 
-sudo umount $esp_mountpoint
-sudo umount $root_mountpoint/swap
-sudo umount $root_mountpoint
+sudo umount "$esp_mountpoint"
+sudo umount "$swap_mountpoint"
+sudo umount "$root_mountpoint"
 sudo losetup -d $loop
-qemu-img convert -f raw -O qcow2 $image $qemu_image
-rm $image
+qemu-img convert -f raw -O qcow2 "$image" "$qemu_image"
+rm "$image"
+rmdir "$root_mountpoint"
+
 ls -lh ${qemu_image} | awk '{print $2}'
 echo "----------Successfully built ${qemu_image}-------------------"
