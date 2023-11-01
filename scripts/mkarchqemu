@@ -167,26 +167,29 @@ else
 fi
 sudo mv "$work_dir/fstab" "$root_mountpoint/etc"
 
+
+etc_profile="$profile_dir/airootfs/etc"
+sudo rsync -av \
+    --exclude="skel" \
+    --exclude="motd" \
+    --exclude="hostname" \
+    --exclude="passwd" \
+    --exclude="shadow" \
+    --exclude="group" \
+    --exclude="gshadow" \
+    --exclude="resolv.conf" \
+    --exclude="pacman.d/hooks" \
+    --exclude="sudoers" \
+    --exclude="systemd" \
+    --exclude="mkinitcpio.d" \
+    --exclude="mkinitcpio.conf.d" \
+    --exclude="modprobe.d" \
+    --exclude="ssh" \
+    --chown=root:root \
+    "$etc_profile/" "$root_mountpoint/etc/"
+
 sudo arch-chroot "$root_mountpoint" /bin/bash <<EOL
 #set -v
-
-add_mirrors="
-[archlinuxcn]
-Include = /etc/pacman.d/archlinuxcn-mirrorlist
-
-[archoream]
-Server = https://mirrors.hoream.top/archoream
-
-#[games]
-#Server = https://mirrors.hoream.top/games
-
-#[arch4edu]
-#Server = https://mirrors.tuna.tsinghua.edu.cn/arch4edu/\\\$arch
-"
-echo -e "\$add_mirrors" | tee -a /etc/pacman.conf
-
-echo 'Server = https://mirrors.hoream.top/archlinux/\$repo/os/\$arch' > /etc/pacman.d/mirrorlist
-echo 'Server = https://mirrors.hoream.top/archlinuxcn/\$arch' > /etc/pacman.d/archlinuxcn-mirrorlist
 
 pacman -Syu --noconfirm
 systemctl enable NetworkManager sshd
@@ -223,6 +226,7 @@ home_profile="$profile_dir/airootfs/etc/skel"
 root_profile="$profile_dir/airootfs/root"
 cp "$home_profile/." "$root_mountpoint/home/$NEWUSER" -r
 sudo cp "$root_profile/." "$root_mountpoint/root" -r
+
 
 sudo umount "$esp_mountpoint"
 if [ "$swap_size" != "off" ]; then
