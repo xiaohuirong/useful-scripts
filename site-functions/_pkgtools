@@ -1,4 +1,4 @@
-#compdef pkgdown pkglist
+#compdef pkgdown pkglist pkgh
 
 # todo: add completions reusage to speed up completions.
 # but now I don't know how to add memorable variable.
