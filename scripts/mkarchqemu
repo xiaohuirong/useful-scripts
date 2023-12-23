@@ -191,7 +191,7 @@ sudo rsync -av \
 sudo arch-chroot "$root_mountpoint" /bin/bash <<EOL
 #set -v
 
-pacman -Syu --noconfirm
+#pacman -Syu --noconfirm
 systemctl enable NetworkManager sshd
 
 ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
