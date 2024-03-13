@@ -1,0 +1,238 @@
+#!/bin/bash
+
+#set -v
+show_help() {
+	echo "Usage: $0 -o <out dir> -w <work_dir> [-s <img_size>] <profile_dir>"
+	echo "  options:"
+    echo "  -d <disk>                 Set the disk to install"
+    echo "  -u <user_name>            Set your user name"
+    echo "  -p <user_passwd>          Set your user passwd"
+	echo "  -w <work_dir>             Set the working directory"
+    echo "  --swap=SIZE|off           Set swap size or disable swap (off) (default 512M)"
+    echo "  --esp=SIZE                Set esp partition size"
+	echo "  -h                        Show this help message"
+	echo "  <profile_dir>             Custom profile directory"
+    echo -e "\nExample:"
+    echo "  mkarch -d /dev/vda -u arch -p 123456 -w . --swap=512M /usr/share/archiso/configs/releng"
+}
+
+swap_size=512M
+while getopts ":d:u:p:w:h-:" opt; do
+	case $opt in
+	d)
+		disk="$OPTARG"
+		;;
+	u)
+		user="$OPTARG"
+		;;
+	p)
+		passwd="$OPTARG"
+		;;
+	w)
+		work_dir="$OPTARG"
+		;;
+	s)
+		img_size="$OPTARG"
+		;;
+	h)
+		show_help
+		exit 0
+		;;
+    -)
+        case "$OPTARG" in
+            help)
+                show_help
+                exit 0
+                ;;
+            swap=*)
+                swap_option="${OPTARG#*=}"
+                if [ "$swap_option" != "off" ]; then
+                  swap_size="$swap_option"
+                else
+                  swap_size="off"
+                fi
+                ;;
+            esp=*)
+                esp_size="${OPTARG#*=}"
+                ;;
+            *)
+                echo "Unvalid option: --$OPTARG" >&2
+                show_help
+                exit 1
+                ;;
+        esac
+        ;;
+	\?)
+		echo "Unvalid option: -$OPTARG" >&2
+		show_help
+		exit 1
+		;;
+	:)
+		echo "-$OPTARG need argument." >&2
+		show_help
+		exit 1
+		;;
+	esac
+done
+
+shift $((OPTIND - 1))
+profile_dir="$1"
+
+if [ -z "$disk" ] || [ -z "$work_dir" ] || [ -z "$profile_dir" ]; then
+	show_help
+    exit
+fi
+
+if [ ! -e "$disk" ]; then
+    echo "disk doesn't exist"
+    exit 1
+elif [ ! -e "$work_dir" ]; then
+    echo "Working directory doesn't exist"
+    exit 1
+elif [ ! -e "$profile_dir" ]; then
+    echo "Profile directory doesn't exist"
+    exit 1
+fi
+
+if [ -z "$user" ]; then
+	user=arch
+fi
+
+if [ -z "$passwd" ]; then
+	passwd=123456
+fi
+
+if [ -z "$esp_size" ]; then
+	esp_size=255M
+fi
+
+work_dir=$(readlink -f "$work_dir")
+profile_dir=$(readlink -f "$profile_dir")
+
+root_mountpoint="$work_dir/arch"
+esp_mountpoint="$root_mountpoint/boot"
+swap_mountpoint="$root_mountpoint/swap"
+
+handle_error() {
+	echo "Something error."
+	sudo umount -R $root_mountpoint
+    exit 1
+}
+trap 'handle_error' ERR
+
+mkdir -p "$root_mountpoint" >/dev/null
+
+sudo sgdisk --clear \
+	--new 1::+1M --typecode=1:ef02 \
+	--new 2::+$esp_size --typecode=2:ef00 \
+	--new 3::-0 --typecode=3:8304 \
+	"$disk" >/dev/null
+
+esp=${disk}2
+root=${disk}3
+sudo mkfs.fat -F32 -n ESP $esp
+sudo mkfs.btrfs -L ROOT $root -f
+
+sudo mount -o compress=zstd "$root" "$root_mountpoint"
+sudo btrfs subvolume create "$root_mountpoint/@"
+
+if [ "$swap_size" != "off" ]; then
+    sudo btrfs subvolume create "$root_mountpoint/@swap"
+    sudo chattr +C "$root_mountpoint/@swap"
+    sudo chmod 0700 "$root_mountpoint/@swap"
+    sudo fallocate -l "$swap_size" "$root_mountpoint/@swap/swapfile"
+    sudo chmod 0600 "$root_mountpoint/@swap/swapfile"
+    sudo mkswap "$root_mountpoint/@swap/swapfile"
+fi
+
+sudo umount "$root_mountpoint"
+sudo mount -o compress=zstd,subvol=@ $root "$root_mountpoint"
+
+sudo mkdir -p "$esp_mountpoint"
+sudo mount $esp "$esp_mountpoint"
+if [ "$swap_size" != "off" ]; then
+    sudo mkdir -p "$swap_mountpoint"
+    sudo mount -o subvol=@swap $root "$swap_mountpoint"
+fi
+
+mapfile -t packages < <(sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' "$profile_dir/qemu_packages")
+sudo pacstrap -C $profile_dir/pacman.conf $root_mountpoint ${packages[@]}
+
+sudo genfstab -U "$root_mountpoint" >"$work_dir/fstab"
+if [ "$swap_size" != "off" ]; then
+    sudo sed -i '10,$d' "$work_dir/fstab"
+    sudo echo "/swap/swapfile none swap sw 0 0" >>"$work_dir/fstab"
+else
+    sudo sed -i '6,$d' "$work_dir/fstab"
+fi
+sudo mv "$work_dir/fstab" "$root_mountpoint/etc"
+
+
+etc_profile="$profile_dir/airootfs/etc"
+sudo rsync -av \
+    --exclude="skel" \
+    --exclude="motd" \
+    --exclude="hostname" \
+    --exclude="passwd" \
+    --exclude="shadow" \
+    --exclude="group" \
+    --exclude="gshadow" \
+    --exclude="resolv.conf" \
+    --exclude="pacman.d/hooks" \
+    --exclude="sudoers" \
+    --exclude="systemd" \
+    --exclude="mkinitcpio.d" \
+    --exclude="mkinitcpio.conf.d" \
+    --exclude="modprobe.d" \
+    --exclude="ssh" \
+    --chown=root:root \
+    "$etc_profile/" "$root_mountpoint/etc/"
+
+sudo arch-chroot "$root_mountpoint" /bin/bash <<EOL
+#set -v
+
+#pacman -Syu --noconfirm
+systemctl enable NetworkManager sshd
+
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+hwclock --systohc
+echo -e 'en_US.UTF-8 UTF-8\nzh_CN.UTF-8 UTF-8' >> /etc/locale.gen
+locale-gen
+
+echo LANG=en_US.UTF-8 > /etc/locale.conf
+echo archqemu > /etc/hostname
+
+echo -e '127.0.0.1  localhost\n::1  localhost' >> /etc/hosts
+
+chsh -s /usr/bin/zsh
+useradd -m -G wheel -s /bin/zsh "${user}"
+chown "${user}:${user}" "/home/${user}"
+echo -e "${passwd}\n${passwd}" | passwd
+echo -e "${passwd}\n${passwd}" | passwd "${user}"
+echo "${user} ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/${user}"
+
+## Setup grub
+grub-install --target=x86_64-efi --recheck --removable --efi-directory=/boot --boot-directory=/boot
+grub-install --target=i386-pc --recheck --boot-directory=/boot "${loop}"
+echo 'GRUB_THEME="/usr/share/grub/themes/vimix-color-2k/theme.txt"' >> /etc/default/grub
+
+grub-mkconfig -o /boot/grub/grub.cfg
+
+cp -a /boot/{initramfs-linux-fallback.img,initramfs-linux.img}
+
+EOL
+
+home_profile="$profile_dir/airootfs/etc/skel"
+root_profile="$profile_dir/airootfs/root"
+cp "$home_profile/." "$root_mountpoint/home/$user" -r
+sudo cp "$root_profile/." "$root_mountpoint/root" -r
+
+
+sudo umount "$esp_mountpoint"
+if [ "$swap_size" != "off" ]; then
+    sudo umount "$swap_mountpoint"
+fi
+sudo umount "$root_mountpoint"
+rmdir "$root_mountpoint"
+
+echo "----------Successfully install-------------------"
