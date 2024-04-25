@@ -2,21 +2,25 @@
 
 #set -v
 show_help() {
-	echo "Usage: $0 -o <out dir> -w <work_dir> [-s <img_size>] <profile_dir>"
+	echo "Usage: $0 -d <disk> -w <work_dir> [-u <user_name>] [-p <user_passwd>] [--swap=<SIZE|off>] [--esp=<SIZE>] <profile_dir>"
 	echo "  options:"
     echo "  -d <disk>                 Set the disk to install"
-    echo "  -u <user_name>            Set your user name"
-    echo "  -p <user_passwd>          Set your user passwd"
+    echo "  -u <user_name>            Set your user name (default arch)"
+    echo "  -p <user_passwd>          Set your user passwd (default 123456)"
 	echo "  -w <work_dir>             Set the working directory"
-    echo "  --swap=SIZE|off           Set swap size or disable swap (off) (default 512M)"
-    echo "  --esp=SIZE                Set esp partition size"
+    echo "  --swap=SIZE|off           Set swap size or disable swap (default 512M)"
+    echo "  --esp=SIZE                Set esp partition size (default 255M)"
 	echo "  -h                        Show this help message"
 	echo "  <profile_dir>             Custom profile directory"
     echo -e "\nExample:"
-    echo "  mkarch -d /dev/vda -u arch -p 123456 -w . --swap=512M /usr/share/archiso/configs/hoream"
+    echo "  $0 -d /dev/vda -w . -u arch -p 123456 --swap=512M --esp=255M /usr/share/archiso/configs/hoream"
 }
 
 swap_size=512M
+esp_size=255M
+user=arch
+passwd=123456
+
 while getopts ":d:u:p:w:h-:" opt; do
 	case $opt in
 	d)
@@ -92,18 +96,6 @@ elif [ ! -e "$work_dir" ]; then
 elif [ ! -e "$profile_dir" ]; then
     echo "Profile directory doesn't exist"
     exit 1
-fi
-
-if [ -z "$user" ]; then
-	user=arch
-fi
-
-if [ -z "$passwd" ]; then
-	passwd=123456
-fi
-
-if [ -z "$esp_size" ]; then
-	esp_size=255M
 fi
 
 work_dir=$(readlink -f "$work_dir")
