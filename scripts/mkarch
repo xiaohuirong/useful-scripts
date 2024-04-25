@@ -13,7 +13,7 @@ show_help() {
 	echo "  -h                        Show this help message"
 	echo "  <profile_dir>             Custom profile directory"
     echo -e "\nExample:"
-    echo "  mkarch -d /dev/vda -u arch -p 123456 -w . --swap=512M /usr/share/archiso/configs/releng"
+    echo "  mkarch -d /dev/vda -u arch -p 123456 -w . --swap=512M /usr/share/archiso/configs/hoream"
 }
 
 swap_size=512M
