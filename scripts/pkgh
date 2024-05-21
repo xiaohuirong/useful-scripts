@@ -20,7 +20,7 @@ import os, re, time, requests
 
 
 ARCHIVE_URL = "https://archive.archlinux.org/packages"
-PATTERN = "([^-]+-[0-9.]+)-(any|x86_64).(pkg.tar.[0-9a-z]*)<\/a>\s*(.*\d)\s{1,}(\w*)"
+PATTERN = r"([^-]+-[0-9.]+)-(any|x86_64).(pkg.tar.[0-9a-z]*)<\/a>\s*(.*\d)\s{1,}(\w*)"
 
 
 def get_pkg_history(pkg_name):
