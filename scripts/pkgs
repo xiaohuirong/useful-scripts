@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# https://gist.github.com/kathawala/43d44a3b13e841e00b65
+	
+( echo "PACKAGE SIZE(M)";
+
+for A in /var/lib/pacman/local/*/desc; do
+  grep -EA1 '%(NAME|SIZE)' $A  \
+   | gawk '/^[a-z]/ { printf "%s ", $1 }; /^[0-9]/ { printf "%.0f\n", $1/1024/1024 }'
+
+done | sort -nrk2 ) | column -t
