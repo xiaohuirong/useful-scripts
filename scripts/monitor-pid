@@ -1,0 +1,98 @@
+#!/bin/bash
+
+# 计算持续时间的函数
+calculate_duration() {
+    local start_time="$1"
+    local end_time="$2"
+
+    local start_sec=$(date -d "$start_time" +%s)
+    local end_sec=$(date -d "$end_time" +%s)
+    local duration=$((end_sec - start_sec))
+
+    local days=$((duration / 86400))
+    local hours=$(( (duration % 86400) / 3600 ))
+    local minutes=$(( (duration % 3600) / 60 ))
+    local seconds=$((duration % 60))
+
+    local elapsed_time=""
+    if [ $days -gt 0 ]; then
+        elapsed_time+="${days}d "
+    fi
+    if [ $hours -gt 0 ]; then
+        elapsed_time+="${hours}h "
+    fi
+    if [ $minutes -gt 0 ]; then
+        elapsed_time+="${minutes}m "
+    fi
+    elapsed_time+="${seconds}s"
+
+    echo "$elapsed_time"
+}
+
+# 获取用户选择的进程，显示 PID、进程名和完整命令
+selected_process=$(ps -eo pid,comm,args --sort=-%cpu | \
+    fzf --header="选择一个进程进行监控" \
+        --height=40% --border \
+        --preview="echo {} | bat --wrap=character --style=plain --color=always")
+
+# 检查是否选择了进程
+if [ -z "$selected_process" ]; then
+    echo "未选择进程，退出。"
+    exit 1
+fi
+
+# 提取 PID、进程名、完整命令
+pid=$(echo "$selected_process" | awk '{print $1}')
+process_name=$(echo "$selected_process" | awk '{print $2}')
+process_cmd=$(echo "$selected_process" | cut -d' ' -f3- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+# 获取进程的开始时间
+start_time=$(LC_ALL=C ps -p $pid -o lstart=)
+
+# 如果进程不存在，则退出
+if [ -z "$start_time" ]; then
+    echo "进程 $pid ($process_name) 不存在或已退出"
+    exit 1
+fi
+
+cur_time=$(LC_ALL=C date +"%a %b %e %T %Y")
+elapsed_time=$(calculate_duration "$start_time" "$cur_time")
+
+echo "STARTED"
+echo "进程名: $process_name"
+echo "进程ID: $pid"
+echo "完整命令: $process_cmd"
+echo "开始时间: $start_time"
+echo "当前时间: $cur_time"
+echo "距离当前: $elapsed_time"
+
+# 发送开始通知
+notify-send "进程监控开始" \
+"进程名称: $process_name ($pid)
+开始时间: $start_time
+当前时间: $cur_time
+距离当前: $elapsed_time"
+
+# 监控进程，直到它退出
+while kill -0 $pid 2>/dev/null; do
+    sleep 1
+done
+
+# 进程结束时间
+end_time=$(LC_ALL=C date +"%a %b %e %T %Y")
+elapsed_time=$(calculate_duration "$start_time" "$end_time")
+
+echo "ENDED"
+echo "进程名: $process_name"
+echo "进程ID: $pid"
+echo "完整命令: $process_cmd"
+echo "开始时间: $start_time"
+echo "结束时间: $end_time"
+echo "持续时间: $elapsed_time"
+
+# 发送结束通知
+notify-send "进程监控完成" \
+"进程名称: $process_name ($pid)
+开始时间: $start_time
+结束时间: $end_time
+持续时间: $elapsed_time"
