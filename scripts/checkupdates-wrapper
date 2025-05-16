@@ -165,9 +165,12 @@ def get_updates(sort_order="significance", filter_level=None):
         elif sort_order == "none":
             pass  # Keep original order
 
+        title_text = f"Available Updates ({len(update_list)} packages)" + (
+            f" [Filter: {filter_level}]" if filter_level else ""
+        )
+
         table = Table(
-            title=f"Available Updates ({len(update_list)} packages)"
-            + (f" [Filter: {filter_level}]" if filter_level else ""),
+            title=title_text,
             title_style="bold magenta",
             border_style="bright_blue",
             header_style="bold cyan",
@@ -175,6 +178,8 @@ def get_updates(sort_order="significance", filter_level=None):
             show_header=True,
             pad_edge=False,
             min_width=80,
+            caption=title_text,  # Same text at the bottom
+            caption_style="bold magenta",
         )
 
         table.add_column("Package", style="bold", no_wrap=True)
