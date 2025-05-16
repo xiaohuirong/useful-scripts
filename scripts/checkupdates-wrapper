@@ -2,31 +2,110 @@
 
 import subprocess
 import re
+import argparse
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich.box import ROUNDED
+from functools import cmp_to_key
 
 
-def highlight_version_changes(old_ver, new_ver):
-    text = Text()
-    old_parts = re.split(r"([^a-zA-Z0-9])", old_ver)
-    new_parts = re.split(r"([^a-zA-Z0-9])", new_ver)
+def parse_version(version):
+    # 处理空版本号情况
+    if not version:
+        return {"epoch": "", "major": "", "minor": "", "patch": "", "build": ""}
 
-    for i, (o, n) in enumerate(zip(old_parts, new_parts)):
-        if o == n:
-            text.append(n)
+    # Initialize default values
+    epoch = ""
+    major = ""
+    minor = ""
+    patch = ""
+    build = ""
+
+    # Split epoch if present
+    if ":" in version:
+        epoch_part, version = version.split(":", 1)
+        epoch = int(epoch_part) if epoch_part else 0
+    else:
+        epoch = 0
+
+    # Split build if present
+    if "-" in version:
+        version_part, build = version.split("-", 1)
+    else:
+        version_part = version
+        build = ""
+
+    # Split version components
+    parts = version_part.split(".")
+
+    if len(parts) >= 1:
+        major = parts[0]
+    if len(parts) >= 2:
+        minor = parts[1]
+    if len(parts) >= 3:
+        patch = ".".join(parts[2:])
+
+    return {
+        "epoch": epoch,
+        "major": major,
+        "minor": minor,
+        "patch": patch,
+        "build": build,
+    }
+
+
+def get_diff(parsed_old, parsed_new):
+    diff = 0
+    if parsed_old["epoch"] != parsed_new["epoch"]:
+        diff += 16
+    if parsed_old["major"] != parsed_new["major"]:
+        diff += 8
+    if parsed_old["minor"] != parsed_new["minor"]:
+        diff += 4
+    if parsed_old["patch"] != parsed_new["patch"]:
+        diff += 2
+    if parsed_old["build"] != parsed_new["build"]:
+        diff += 1
+
+    return diff
+
+
+def highlight_version_changes(old_parsed, new_parsed):
+    old_text = Text()
+    new_text = Text()
+
+    def append_part(old_val, new_val, prefix=None, suffix=None):
+        if prefix:
+            old_text.append(prefix) if old_val else None
+            new_text.append(prefix) if new_val else None
+
+        if old_val != new_val:
+            old_text.append(str(old_val), style="bold red") if old_val else None
+            new_text.append(str(new_val), style="bold green") if new_val else None
         else:
-            text.append(n, style="bold red")
+            old_text.append(str(old_val)) if old_val else None
+            new_text.append(str(new_val)) if new_val else None
 
-    if len(new_parts) > len(old_parts):
-        for extra in new_parts[len(old_parts) :]:
-            text.append(extra, style="bold red")
+        if suffix:
+            old_text.append(suffix) if old_val else None
+            new_text.append(suffix) if new_val else None
 
-    return text
+    # Epoch
+    append_part(old_parsed["epoch"], new_parsed["epoch"], suffix=":")
+    # major version
+    append_part(old_parsed["major"], new_parsed["major"])
+    # Minor version
+    append_part(old_parsed["minor"], new_parsed["minor"], prefix=".")
+    # Patch version
+    append_part(old_parsed["patch"], new_parsed["patch"], prefix=".")
+    # Build number
+    append_part(old_parsed["build"], new_parsed["build"], prefix="-")
+
+    return old_text, new_text
 
 
-def get_updates():
+def get_updates(sort_order="significance", filter_level=None):
     console = Console()
 
     try:
@@ -39,29 +118,90 @@ def get_updates():
             console.print("No updates available.", style="bold green")
             return
 
+        # Parse updates
+        update_list = []
+        for line in updates:
+            if " -> " not in line:
+                continue
+
+            try:
+                pkg, versions = line.split(maxsplit=1)
+                old_ver, new_ver = versions.split(" -> ")
+                parsed_old = parse_version(old_ver)
+                parsed_new = parse_version(new_ver)
+                diff = get_diff(parsed_old, parsed_new)
+
+                # Apply filter if specified
+                if filter_level is not None:
+                    if filter_level == "major" and diff < 8:
+                        continue
+                    elif filter_level == "minor" and diff < 4:
+                        continue
+                    elif filter_level == "patch" and diff < 2:
+                        continue
+                    elif filter_level == "build" and diff < 1:
+                        continue
+
+                update_list.append(
+                    {
+                        "pkg": pkg,
+                        "old": old_ver,
+                        "new": new_ver,
+                        "parsed_old": parsed_old,
+                        "parsed_new": parsed_new,
+                        "diff": diff,
+                    }
+                )
+            except:
+                continue
+
+        # Sorting logic
+        if sort_order == "significance":
+            update_list.sort(key=lambda x: x["diff"], reverse=True)
+        elif sort_order == "reverse":
+            update_list.sort(key=lambda x: x["diff"], reverse=False)
+        elif sort_order == "name":
+            update_list.sort(key=lambda x: x["pkg"])
+        elif sort_order == "none":
+            pass  # Keep original order
+
         table = Table(
-            title="Available Updates",
+            title=f"Available Updates ({len(update_list)} packages)"
+            + (f" [Filter: {filter_level}]" if filter_level else ""),
             title_style="bold magenta",
             border_style="bright_blue",
             header_style="bold cyan",
             box=ROUNDED,
             show_header=True,
             pad_edge=False,
-            min_width=60,
+            min_width=80,
         )
 
         table.add_column("Package", style="bold", no_wrap=True)
-        table.add_column("Current Version", style="dim")
-        table.add_column("New Version", style="bold")
+        table.add_column("Current Version", style="dim", min_width=25)
+        table.add_column("New Version", style="bold", min_width=25)
+        if sort_order != "none":
+            table.add_column("Change Level", style="dim", min_width=15)
 
-        for line in updates:
-            if " -> " not in line:
-                continue
-
-            pkg, versions = line.split(maxsplit=1)
-            old_ver, new_ver = versions.split(" -> ")
-
-            table.add_row(pkg, old_ver, highlight_version_changes(old_ver, new_ver))
+        for update in update_list:
+            old_highlighted, new_highlighted = highlight_version_changes(
+                update["parsed_old"], update["parsed_new"]
+            )
+            if sort_order != "none":
+                change_level = ""
+                if update["diff"] >= 8:
+                    change_level = "Major"
+                elif update["diff"] >= 4:
+                    change_level = "Minor"
+                elif update["diff"] >= 2:
+                    change_level = "Patch"
+                else:
+                    change_level = "Build"
+                table.add_row(
+                    update["pkg"], old_highlighted, new_highlighted, change_level
+                )
+            else:
+                table.add_row(update["pkg"], old_highlighted, new_highlighted)
 
         console.print(table)
 
@@ -75,4 +215,22 @@ def get_updates():
 
 
 if __name__ == "__main__":
-    get_updates()
+    parser = argparse.ArgumentParser(
+        description="Display system updates with version comparison."
+    )
+    parser.add_argument(
+        "-s",
+        "--sort",
+        choices=["significance", "reverse", "name", "none"],
+        default="significance",
+        help="Sort order for updates (default: significance)",
+    )
+    parser.add_argument(
+        "-f",
+        "--filter",
+        choices=["major", "minor", "patch", "build"],
+        help="Filter updates by version change level",
+    )
+
+    args = parser.parse_args()
+    get_updates(sort_order=args.sort, filter_level=args.filter)
