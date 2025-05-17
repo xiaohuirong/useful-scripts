@@ -196,14 +196,21 @@ def get_updates(sort_order="significance", filter_level=None):
                 change_level = ""
                 if update["diff"] >= 8:
                     change_level = "Major"
+                    color = "red"
                 elif update["diff"] >= 4:
                     change_level = "Minor"
+                    color = "yellow"
                 elif update["diff"] >= 2:
                     change_level = "Patch"
+                    color = "green"
                 else:
                     change_level = "Build"
+                    color = "cyan"
+
+                # Create a styled Text object
+                level_text = Text(change_level, style=color)
                 table.add_row(
-                    update["pkg"], old_highlighted, new_highlighted, change_level
+                    update["pkg"], old_highlighted, new_highlighted, level_text
                 )
             else:
                 table.add_row(update["pkg"], old_highlighted, new_highlighted)
