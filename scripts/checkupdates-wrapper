@@ -185,35 +185,29 @@ def get_updates(sort_order="significance", filter_level=None):
         table.add_column("Package", style="bold", no_wrap=True)
         table.add_column("Current Version", style="dim", min_width=25)
         table.add_column("New Version", style="bold", min_width=25)
-        if sort_order != "none":
-            table.add_column("Change Level", style="dim", min_width=15)
+        table.add_column("Change Level", style="dim", min_width=15)
 
         for update in update_list:
             old_highlighted, new_highlighted = highlight_version_changes(
                 update["parsed_old"], update["parsed_new"]
             )
-            if sort_order != "none":
-                change_level = ""
-                if update["diff"] >= 8:
-                    change_level = "Major"
-                    color = "red"
-                elif update["diff"] >= 4:
-                    change_level = "Minor"
-                    color = "yellow"
-                elif update["diff"] >= 2:
-                    change_level = "Patch"
-                    color = "green"
-                else:
-                    change_level = "Build"
-                    color = "cyan"
-
-                # Create a styled Text object
-                level_text = Text(change_level, style=color)
-                table.add_row(
-                    update["pkg"], old_highlighted, new_highlighted, level_text
-                )
+            change_level = ""
+            if update["diff"] >= 8:
+                change_level = "Major"
+                color = "red"
+            elif update["diff"] >= 4:
+                change_level = "Minor"
+                color = "yellow"
+            elif update["diff"] >= 2:
+                change_level = "Patch"
+                color = "green"
             else:
-                table.add_row(update["pkg"], old_highlighted, new_highlighted)
+                change_level = "Build"
+                color = "cyan"
+
+            # Create a styled Text object
+            level_text = Text(change_level, style=color)
+            table.add_row(update["pkg"], old_highlighted, new_highlighted, level_text)
 
         console.print(table)
 
