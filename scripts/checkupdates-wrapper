@@ -185,7 +185,7 @@ def get_updates(sort_order="significance", filter_level=None):
         table.add_column("Package", style="bold", no_wrap=True)
         table.add_column("Current Version", style="dim", min_width=25)
         table.add_column("New Version", style="bold", min_width=25)
-        table.add_column("Change Level", style="dim", min_width=15)
+        # table.add_column("Change Level", style="dim", min_width=15)
 
         for update in update_list:
             old_highlighted, new_highlighted = highlight_version_changes(
@@ -207,7 +207,9 @@ def get_updates(sort_order="significance", filter_level=None):
 
             # Create a styled Text object
             level_text = Text(change_level, style=color)
-            table.add_row(update["pkg"], old_highlighted, new_highlighted, level_text)
+            pkg_text = Text(update["pkg"], style=color)
+            # table.add_row(pkg_text, old_highlighted, new_highlighted, level_text)
+            table.add_row(pkg_text, old_highlighted, new_highlighted)
 
         console.print(table)
 
